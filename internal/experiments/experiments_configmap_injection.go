@@ -1,5 +1,5 @@
 /*
-Copyright 2025 Operant AI
+Copyright 2025 Christian (ReK2) F.N.
 */
 package experiments
 
