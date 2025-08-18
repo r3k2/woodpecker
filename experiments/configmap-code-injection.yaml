@@ -1,0 +1,42 @@
+experiments:
+  - metadata:
+      name: configmap-injection-test
+      type: configmap-code-injection
+      namespace: default
+    parameters:
+      mountPath: "/scripts"
+      targetCommand: "/scripts/malicious.sh"
+      scriptContent: |
+        #!/bin/sh
+        echo "=== ConfigMap Code Injection Test ===" > /tmp/injection-success
+        echo "Timestamp: $(date)" >> /tmp/injection-success
+        echo "User: $(whoami)" >> /tmp/injection-success
+        echo "Container ID: $(cat /proc/self/cgroup | head -1)" >> /tmp/injection-success
+        
+        # Test 1: Check service account access
+        echo "" >> /tmp/injection-success
+        echo "[*] Testing Service Account Access:" >> /tmp/injection-success
+        if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+            echo "SUCCESS: Service account token is accessible" >> /tmp/injection-success
+            echo "Token exists at: /var/run/secrets/kubernetes.io/serviceaccount/token" >> /tmp/injection-success
+        else
+            echo "FAIL: No service account token found" >> /tmp/injection-success
+        fi
+        
+        # Test 2: Check environment for secrets
+        echo "" >> /tmp/injection-success
+        echo "[*] Checking Environment Variables:" >> /tmp/injection-success
+        env | grep -i "secret\|key\|token\|pass" >> /tmp/injection-success 2>&1 || echo "No sensitive env vars found" >> /tmp/injection-success
+        
+        # Test 3: Check mounted volumes
+        echo "" >> /tmp/injection-success
+        echo "[*] Mounted Volumes:" >> /tmp/injection-success
+        mount | grep -v "proc\|sys\|dev" >> /tmp/injection-success
+        
+        # Test 4: Network access test
+        echo "" >> /tmp/injection-success
+        echo "[*] Testing Network Access:" >> /tmp/injection-success
+        wget -q -O - http://kubernetes.default.svc/version >> /tmp/injection-success 2>&1 || echo "Cannot reach K8s API" >> /tmp/injection-success
+        
+        echo "" >> /tmp/injection-success
+        echo "=== Test Complete ===" >> /tmp/injection-success
