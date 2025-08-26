@@ -1,42 +1,28 @@
 experiments:
   - metadata:
-      name: configmap-injection-test
+      name: configmap-injection
       type: configmap-code-injection
       namespace: default
     parameters:
-      mountPath: "/scripts"
-      targetCommand: "/scripts/malicious.sh"
+      mountPath: "/injected-scripts"
+      targetCommand: "/injected-scripts/payload.sh"
       scriptContent: |
         #!/bin/sh
-        echo "=== ConfigMap Code Injection Test ===" > /tmp/injection-success
-        echo "Timestamp: $(date)" >> /tmp/injection-success
-        echo "User: $(whoami)" >> /tmp/injection-success
-        echo "Container ID: $(cat /proc/self/cgroup | head -1)" >> /tmp/injection-success
+        # ConfigMap code injection test payload
+        # This demonstrates how untrusted ConfigMaps can execute arbitrary code
         
-        # Test 1: Check service account access
-        echo "" >> /tmp/injection-success
-        echo "[*] Testing Service Account Access:" >> /tmp/injection-success
+        # Create evidence file
+        echo "[+] ConfigMap injection successful" > /tmp/configmap-injection-evidence
+        echo "[+] Executed at: $(date)" >> /tmp/configmap-injection-evidence
+        echo "[+] Running as: $(whoami)" >> /tmp/configmap-injection-evidence
+        
+        # Test for privilege escalation opportunities
         if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
-            echo "SUCCESS: Service account token is accessible" >> /tmp/injection-success
-            echo "Token exists at: /var/run/secrets/kubernetes.io/serviceaccount/token" >> /tmp/injection-success
-        else
-            echo "FAIL: No service account token found" >> /tmp/injection-success
+            echo "[!] Service account token found - potential privilege escalation vector" >> /tmp/configmap-injection-evidence
         fi
         
-        # Test 2: Check environment for secrets
-        echo "" >> /tmp/injection-success
-        echo "[*] Checking Environment Variables:" >> /tmp/injection-success
-        env | grep -i "secret\|key\|token\|pass" >> /tmp/injection-success 2>&1 || echo "No sensitive env vars found" >> /tmp/injection-success
+        # Check for sensitive environment variables
+        env | grep -i "secret\|password\|token\|key" >> /tmp/configmap-injection-evidence 2>/dev/null || echo "[*] No sensitive environment variables found" >> /tmp/configmap-injection-evidence
         
-        # Test 3: Check mounted volumes
-        echo "" >> /tmp/injection-success
-        echo "[*] Mounted Volumes:" >> /tmp/injection-success
-        mount | grep -v "proc\|sys\|dev" >> /tmp/injection-success
-        
-        # Test 4: Network access test
-        echo "" >> /tmp/injection-success
-        echo "[*] Testing Network Access:" >> /tmp/injection-success
-        wget -q -O - http://kubernetes.default.svc/version >> /tmp/injection-success 2>&1 || echo "Cannot reach K8s API" >> /tmp/injection-success
-        
-        echo "" >> /tmp/injection-success
-        echo "=== Test Complete ===" >> /tmp/injection-success
+        # Log completion
+        echo "[+] Injection test completed" >> /tmp/configmap-injection-evidence

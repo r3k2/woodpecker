@@ -20,7 +20,7 @@ import (
 
 // ConfigMapInjectionExperiment tests if malicious code can be injected via ConfigMaps
 type ConfigMapInjectionExperiment struct {
-	Metadata   ExperimentMetadata    `yaml:"metadata"`
+	Metadata   ExperimentMetadata       `yaml:"metadata"`
 	Parameters ConfigMapInjectionParams `yaml:"parameters"`
 }
 
@@ -63,31 +63,17 @@ func (e *ConfigMapInjectionExperiment) Run(ctx context.Context, experimentConfig
 		return err
 	}
 
-	// Set defaults if not provided
+	// Validate required parameters
 	if config.Parameters.ScriptContent == "" {
-		config.Parameters.ScriptContent = `#!/bin/sh
-echo "MALICIOUS CODE EXECUTED" > /tmp/injection-success
-echo "User: $(whoami)" >> /tmp/injection-success
-echo "Hostname: $(hostname)" >> /tmp/injection-success
-echo "Environment:" >> /tmp/injection-success
-env >> /tmp/injection-success
-# Attempt to access service account token
-if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
-    echo "SERVICE ACCOUNT TOKEN ACCESSIBLE" >> /tmp/injection-success
-    echo "Token preview: $(head -c 50 /var/run/secrets/kubernetes.io/serviceaccount/token)..." >> /tmp/injection-success
-fi
-# Check for other mounted secrets
-echo "Mounted volumes:" >> /tmp/injection-success
-mount >> /tmp/injection-success
-`
+		return fmt.Errorf("scriptContent parameter is required")
 	}
 
 	if config.Parameters.MountPath == "" {
-		config.Parameters.MountPath = "/scripts"
+		return fmt.Errorf("mountPath parameter is required")
 	}
 
 	if config.Parameters.TargetCommand == "" {
-		config.Parameters.TargetCommand = "/scripts/malicious.sh"
+		return fmt.Errorf("targetCommand parameter is required")
 	}
 
 	clientset := client.Clientset
@@ -102,7 +88,7 @@ mount >> /tmp/injection-success
 			},
 		},
 		Data: map[string]string{
-			"malicious.sh": config.Parameters.ScriptContent,
+			"payload.sh": config.Parameters.ScriptContent,
 		},
 	}
 
@@ -141,7 +127,7 @@ mount >> /tmp/injection-success
 							Command: []string{
 								"sh",
 								"-c",
-								fmt.Sprintf("sh %s && tail -f /dev/null", 
+								fmt.Sprintf("sh %s && tail -f /dev/null",
 									config.Parameters.TargetCommand),
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -229,10 +215,10 @@ func (e *ConfigMapInjectionExperiment) Verify(ctx context.Context, experimentCon
 	// Try to exec into the pod and check for injection success
 	pod := pods.Items[0]
 	if pod.Status.Phase == corev1.PodRunning {
-		// Check if script executed by looking for the output file
-		command := []string{"cat", "/tmp/injection-success"}
+		// Check if script executed by looking for the evidence file
+		command := []string{"cat", "/tmp/configmap-injection-evidence"}
 		stdout, stderr, err := client.ExecuteRemoteCommand(ctx, config.Metadata.Namespace, pod.Name, "target-container", command)
-		
+
 		if err == nil && stdout != "" {
 			v.Success("script-executed")
 			v.StoreResultOutputs("injection-output", stdout)
@@ -273,7 +259,7 @@ func (e *ConfigMapInjectionExperiment) Cleanup(ctx context.Context, experimentCo
 	}
 
 	clientset := client.Clientset
-	
+
 	// Delete deployment (this will also delete the pods it created)
 	err = clientset.AppsV1().Deployments(config.Metadata.Namespace).Delete(ctx, config.Metadata.Name, metav1.DeleteOptions{})
 	if err != nil && !errors.IsNotFound(err) {
