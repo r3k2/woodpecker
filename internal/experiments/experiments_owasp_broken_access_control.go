@@ -33,7 +33,7 @@ func (e *OWASPBrokenAccessControlExperiment) Type() string {
 }
 
 func (e *OWASPBrokenAccessControlExperiment) Description() string {
-	return "Test for OWASP A01:2021 - Broken Access Control vulnerabilities in Kubernetes"
+	return "OWASP A01:2021 - Tests for broken access control, RBAC misconfigurations, and unauthorized namespace access in Kubernetes"
 }
 
 func (e *OWASPBrokenAccessControlExperiment) Framework() string {
@@ -129,8 +129,12 @@ func (e *OWASPBrokenAccessControlExperiment) Run(ctx context.Context, experiment
 func generateAccessTestScript(params OWASPBrokenAccessControlParams) string {
 	var commands []string
 	
-	commands = append(commands, "echo '=== OWASP A01: Broken Access Control Test ===' > /tmp/access-test-results")
-	commands = append(commands, fmt.Sprintf("echo 'Testing access to namespace: %s' >> /tmp/access-test-results", params.TargetNamespace))
+	commands = append(commands, "echo '=== OWASP A01:2021 - Broken Access Control Test ===' > /tmp/access-test-results")
+	commands = append(commands, "echo 'Reference: https://owasp.org/Top10/A01_2021-Broken_Access_Control/' >> /tmp/access-test-results")
+	commands = append(commands, fmt.Sprintf("echo 'Test Started: %s' >> /tmp/access-test-results", "`date`"))
+	commands = append(commands, fmt.Sprintf("echo 'Testing unauthorized access to namespace: %s' >> /tmp/access-test-results", params.TargetNamespace))
+	commands = append(commands, fmt.Sprintf("echo 'Running as: %s' >> /tmp/access-test-results", "`whoami`"))
+	commands = append(commands, fmt.Sprintf("echo 'Service Account: %s' >> /tmp/access-test-results", "`cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null`/`basename /var/run/secrets/kubernetes.io/serviceaccount/..data`"))
 	commands = append(commands, "echo '' >> /tmp/access-test-results")
 
 	for _, attempt := range params.AccessAttempts {
@@ -152,8 +156,15 @@ func generateAccessTestScript(params OWASPBrokenAccessControlParams) string {
 	commands = append(commands, "echo '[*] Checking service account token access' >> /tmp/access-test-results")
 	commands = append(commands, "if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then echo 'Service account token found' >> /tmp/access-test-results; else echo 'No service account token' >> /tmp/access-test-results; fi")
 	
+	// Log summary
+	commands = append(commands, "echo '' >> /tmp/access-test-results")
+	commands = append(commands, "echo '=== Summary ===' >> /tmp/access-test-results")
+	commands = append(commands, fmt.Sprintf("echo 'Total access attempts: %d' >> /tmp/access-test-results", len(params.AccessAttempts)))
+	commands = append(commands, "echo 'Check above for VULNERABLE vs SECURE results' >> /tmp/access-test-results")
+	commands = append(commands, fmt.Sprintf("echo 'Test Completed: %s' >> /tmp/access-test-results", "`date`"))
+	commands = append(commands, "echo '=== End of OWASP A01:2021 Test ===' >> /tmp/access-test-results")
+	
 	// Keep pod alive for verification
-	commands = append(commands, "echo '=== Test Complete ===' >> /tmp/access-test-results")
 	commands = append(commands, "sleep 300")
 
 	return strings.Join(commands, " && ")
